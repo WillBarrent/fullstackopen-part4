@@ -1,18 +1,54 @@
 const blogRouter = require("express").Router();
+const { request } = require("../app");
 const Blog = require("../models/blog");
 
-blogRouter.get("/", (request, response) => {
-  Blog.find({}).then((blogs) => {
-    response.json(blogs);
-  });
+blogRouter.get("/", async (request, response) => {
+  const blogs = await Blog.find({});
+  response.json(blogs);
 });
 
-blogRouter.post("/", (request, response) => {
-  const blog = new Blog(request.body);
+blogRouter.post("/", async (request, response) => {
+  let data = request.body;
 
-  blog.save().then((result) => {
-    response.status(201).json(result);
-  });
+  if (!data.title || !data.url) {
+    return response.status(400).json({ error: "title or url not defined" });
+  }
+
+  if (!Object.keys(data).includes("likes")) {
+    data = {
+      ...data,
+      likes: 0,
+    };
+  }
+
+  const blog = new Blog(data);
+  const result = await blog.save();
+
+  response.status(201).json(result);
+});
+
+blogRouter.put("/:id", async (request, response) => {
+  const blog = await Blog.findById(request.params.id);
+
+  if (!blog) {
+    return response.status(404).end();
+  }
+
+  const { title, author, url, likes } = request.body;
+
+  blog.title = title;
+  blog.author = author;
+  blog.url = url;
+  blog.likes = likes;
+
+  const result = await blog.save();
+
+  response.status(200).json(result);
+});
+
+blogRouter.delete("/:id", async (request, response) => {
+  await Blog.findByIdAndDelete(request.params.id);
+  response.status(204).end();
 });
 
 module.exports = blogRouter;
