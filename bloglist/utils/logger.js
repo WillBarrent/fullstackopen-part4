@@ -10,4 +10,4 @@ const error = (...params) => {
   }
 };
 
-module.exports = { info };
+module.exports = { info, error };

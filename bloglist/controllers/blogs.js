@@ -1,14 +1,25 @@
 const blogRouter = require("express").Router();
 const { request } = require("../app");
 const Blog = require("../models/blog");
+const User = require("../models/user");
 
 blogRouter.get("/", async (request, response) => {
-  const blogs = await Blog.find({});
+  const blogs = await Blog.find({}).populate("user", {
+    id: 1,
+    name: 1,
+    username: 1,
+  });
   response.json(blogs);
 });
 
 blogRouter.post("/", async (request, response) => {
   let data = request.body;
+
+  const user = await User.findById(data.userId);
+
+  if (!user) {
+    return response.status(400).json({ error: "userId missing or not valid" });
+  }
 
   if (!data.title || !data.url) {
     return response.status(400).json({ error: "title or url not defined" });
@@ -21,8 +32,10 @@ blogRouter.post("/", async (request, response) => {
     };
   }
 
-  const blog = new Blog(data);
+  const blog = new Blog({ ...data, user: user._id });
   const result = await blog.save();
+  user.blogs = user.blogs.concat(blog._id);
+  await user.save();
 
   response.status(201).json(result);
 });

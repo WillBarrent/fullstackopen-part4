@@ -1,10 +1,12 @@
 const { test, after, describe, beforeEach } = require("node:test");
 const mongoose = require("mongoose");
 const supertest = require("supertest");
+const bcrypt = require("bcrypt");
 const app = require("../app");
 const assert = require("node:assert");
 const helper = require("./test_helper");
 const Blog = require("../models/blog");
+const User = require("../models/user");
 
 const api = supertest(app);
 
@@ -152,6 +154,91 @@ describe("when there is inititially some blogs saved", () => {
 
       await api.put(`/api/blogs/${validNonExistingId}`).expect(404);
     });
+  });
+
+  after(async () => {
+    await mongoose.connection.close();
+  });
+});
+
+describe("when there is initially one user in db", () => {
+  beforeEach(async () => {
+    await User.deleteMany({});
+
+    const passwordHash = await bcrypt.hash("lilpass", 10);
+    const user = new User({ username: "root", passwordHash });
+
+    await user.save();
+  });
+
+  test("creation of user succeeds with unique username", async () => {
+    const usersAtStart = await helper.usersInDb();
+
+    const newUser = {
+      username: "Will",
+      name: "Will Barrent",
+      password: "bbrnt",
+    };
+
+    await api
+      .post("/api/users")
+      .send(newUser)
+      .expect(201)
+      .expect("Content-Type", /application\/json/);
+
+    const usersAtEnd = await helper.usersInDb();
+    assert.strictEqual(usersAtEnd.length, usersAtStart.length + 1);
+
+    const usernames = usersAtEnd.map((u) => u.username);
+    assert(usernames.includes(newUser.username));
+  });
+
+  test("creation of user fails with not unique name", async () => {
+    const usersAtStart = await helper.usersInDb();
+
+    const newUser = {
+      username: "root",
+      name: "Will Barrent",
+      password: "111111",
+    };
+
+    const result = await api
+      .post("/api/users")
+      .send(newUser)
+      .expect(400)
+      .expect("Content-Type", /application\/json/);
+
+    const usersAtEnd = await helper.usersInDb();
+    const isUnique = usersAtEnd
+      .map((u) => u.username)
+      .filter((u) => u == newUser.username);
+
+    assert.strictEqual(usersAtEnd.length, usersAtStart.length);
+    assert.strictEqual(isUnique.length === 1, true);
+    assert.strictEqual(result.body.error, "expected `username` to be unique");
+  });
+
+  test("creation of user fails with password length < 3", async () => {
+    const usersAtStart = await helper.usersInDb();
+
+    const newUser = {
+      username: "Will",
+      name: "Will Barrent",
+      password: "42",
+    };
+
+    const result = await api
+      .post("/api/users")
+      .send(newUser)
+      .expect(400)
+      .expect("Content-Type", /application\/json/);
+
+    const usersAtEnd = await helper.usersInDb();
+    assert.strictEqual(usersAtEnd.length, usersAtStart.length);
+    assert.strictEqual(
+      result.body.error,
+      "Password length should be at least 3 character long",
+    );
   });
 
   after(async () => {

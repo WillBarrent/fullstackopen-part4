@@ -1,7 +1,9 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const config = require("./utils/config");
-const blogRouter = require("./controllers/blog");
+const middleware = require("./utils/middleware");
+const blogRouter = require("./controllers/blogs");
+const userRouter = require("./controllers/users");
 
 const app = express();
 
@@ -10,5 +12,8 @@ mongoose.connect(mongoUrl, { family: 4 });
 
 app.use(express.json());
 app.use("/api/blogs", blogRouter);
+app.use("/api/users", userRouter);
+
+app.use(middleware.errorHandler);
 
 module.exports = app;
