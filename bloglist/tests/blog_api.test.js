@@ -1,19 +1,36 @@
+require("dotenv").config();
 const { test, after, describe, beforeEach } = require("node:test");
 const mongoose = require("mongoose");
 const supertest = require("supertest");
 const bcrypt = require("bcrypt");
 const app = require("../app");
+const jwt = require("jsonwebtoken");
 const assert = require("node:assert");
 const helper = require("./test_helper");
 const Blog = require("../models/blog");
 const User = require("../models/user");
 
+const secret_key = process.env.SECRET;
 const api = supertest(app);
 
 describe("when there is inititially some blogs saved", () => {
   beforeEach(async () => {
+    await User.deleteMany({});
+
+    const passwordHash = await bcrypt.hash("lilpass", 10);
+    const user = new User({ username: "root", passwordHash });
+
+    await user.save();
+
     await Blog.deleteMany({});
-    await Blog.insertMany(helper.initialBlogs);
+    await Blog.insertMany(
+      helper.initialBlogs.map((blog) => {
+        return {
+          ...blog,
+          user: user._id,
+        };
+      }),
+    );
   });
 
   test("blogs are returned as json", async () => {
@@ -55,8 +72,18 @@ describe("when there is inititially some blogs saved", () => {
         likes: 6,
       };
 
-      await api
+      const user = await User.find({ username: "root" });
+
+      const userForToken = {
+        username: user[0].username,
+        id: user[0]._id,
+      };
+
+      const token = jwt.sign(userForToken, secret_key);
+
+      const result = await api
         .post("/api/blogs")
+        .set("Authorization", `Bearer ${token}`)
         .send(newBlog)
         .expect(201)
         .expect("Content-Type", /application\/json/);
@@ -77,8 +104,18 @@ describe("when there is inititially some blogs saved", () => {
         url: "example3.com",
       };
 
+      const user = await User.find({ username: "root" });
+
+      const userForToken = {
+        username: user[0].username,
+        id: user[0]._id,
+      };
+
+      const token = jwt.sign(userForToken, secret_key);
+
       const result = await api
         .post("/api/blogs")
+        .set("Authorization", `Bearer ${token}`)
         .send(newBlog)
         .expect(201)
         .expect("Content-Type", /application\/json/);
@@ -97,8 +134,18 @@ describe("when there is inititially some blogs saved", () => {
         author: "Mark",
       };
 
+      const user = await User.find({ username: "root" });
+
+      const userForToken = {
+        username: user[0].username,
+        id: user[0]._id,
+      };
+
+      const token = jwt.sign(userForToken, secret_key);
+
       const result = await api
         .post("/api/blogs")
+        .set("Authorization", `Bearer ${token}`)
         .send(newBlog)
         .expect(400)
         .expect("Content-Type", /application\/json/);
@@ -109,6 +156,20 @@ describe("when there is inititially some blogs saved", () => {
       assert(Object.keys(result.body).includes("error"));
       assert.strictEqual(result.body.error, "title or url not defined");
     });
+
+    test("401 when token is missing", async () => {
+      const newBlog = {
+        author: "Mark",
+      };
+
+      const result = await api
+        .post("/api/blogs")
+        .send(newBlog)
+        .expect(401)
+        .expect("Content-Type", /application\/json/);
+
+      assert.strictEqual(result.body.error, "token invalid");
+    })
   });
 
   describe("deletion of existing blog", () => {

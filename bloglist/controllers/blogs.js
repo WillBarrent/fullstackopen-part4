@@ -15,7 +15,7 @@ blogRouter.get("/", async (request, response) => {
 blogRouter.post("/", async (request, response) => {
   let data = request.body;
 
-  const user = await User.findById(data.userId);
+  const user = await User.findById(request.user.id);
 
   if (!user) {
     return response.status(400).json({ error: "userId missing or not valid" });
@@ -60,6 +60,22 @@ blogRouter.put("/:id", async (request, response) => {
 });
 
 blogRouter.delete("/:id", async (request, response) => {
+  if (!request.token) {
+    return response.status(400).json({ error: "token is missing" });
+  }
+
+  const blog = await Blog.findById(request.params.id);
+
+  if (!blog) {
+    return response.status(204).end();
+  }
+
+  const user = await User.findById(request.user.id);
+
+  if (blog.user.toString() !== user._id.toString()) {
+    return response.status(401).json({ error: "not allowed to delete" });
+  }
+
   await Blog.findByIdAndDelete(request.params.id);
   response.status(204).end();
 });
