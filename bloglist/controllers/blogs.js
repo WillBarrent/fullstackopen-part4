@@ -44,7 +44,13 @@ blogRouter.put("/:id", async (request, response) => {
   const blog = await Blog.findById(request.params.id);
 
   if (!blog) {
-    return response.status(404).end();
+    return response.status(404).json({ error: "blog doesn't exist" });
+  }
+
+  const user = await User.findById(request.user.id);
+
+  if (!user) {
+    return response.status(400).json({ error: "userId missing or not valid" });
   }
 
   const { title, author, url, likes } = request.body;
